@@ -281,7 +281,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 ## 9. LLM Integration
 
-When writing code to make calls to LLMs, use cerebras-inference skill to use LiteLLM via OpenRouter to the `openrouter/openai/gpt-oss-120b` model with Cerebras as the inference provider. Structured Outputs should be used to interpret the results.
+When writing code to make calls to LLMs, use cerebras-inference skill [located at .claude/skills/cerebras/] to use LiteLLM via OpenRouter to the `openrouter/openai/gpt-oss-120b` model with Cerebras as the inference provider. Structured Outputs should be used to interpret the results.
 
 There is an OPENROUTER_API_KEY in the .env file in the project root.
 
@@ -292,7 +292,7 @@ When the user sends a chat message, the backend:
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
 2. Loads recent conversation history from the `chat_messages` table
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
-4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
+4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill [located at .claude/skills/cerebras/]
 5. Parses the complete structured JSON response
 6. Auto-executes any trades or watchlist changes specified in the response
 7. Stores the message and executed actions in `chat_messages`
@@ -372,6 +372,8 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 ---
 
 ## 11. Docker & Deployment
+
+Note (new): This project will now run for Docker Desktop version 4.41.2 (191736). Ensure all Docker commands, volume syntax, and Compose features are compatible with this version. Fix and rewrite the neccesary code and .md files when needed if not needed then leave the code and .md files like they are.
 
 ### Multi-Stage Dockerfile
 
