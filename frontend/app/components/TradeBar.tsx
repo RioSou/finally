@@ -1,23 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useRef, useState } from "react";
 
 interface TradeBarProps {
   selectedTicker: string | null;
   onTradeComplete: () => void;
 }
 
-export default function TradeBar({ selectedTicker, onTradeComplete }: TradeBarProps) {
+const TradeBar = memo(function TradeBar({ selectedTicker, onTradeComplete }: TradeBarProps) {
   const [ticker, setTicker] = useState("");
   const [quantity, setQuantity] = useState("");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Refs ensure executeTrade always reads the latest values even in concurrent renders
+  const tickerRef = useRef(ticker);
+  const quantityRef = useRef(quantity);
+  const selectedTickerRef = useRef(selectedTicker);
+  tickerRef.current = ticker;
+  quantityRef.current = quantity;
+  selectedTickerRef.current = selectedTicker;
+
   const activeTicker = ticker || selectedTicker || "";
 
   const executeTrade = async (side: "buy" | "sell") => {
-    const qty = parseFloat(quantity);
-    if (!activeTicker || isNaN(qty) || qty <= 0) {
+    const currentTicker = tickerRef.current || selectedTickerRef.current || "";
+    const qty = parseFloat(quantityRef.current);
+    if (!currentTicker || isNaN(qty) || qty <= 0) {
       setMessage({ text: "Enter a valid ticker and quantity", type: "error" });
       return;
     }
@@ -28,11 +37,11 @@ export default function TradeBar({ selectedTicker, onTradeComplete }: TradeBarPr
       const res = await fetch("/api/portfolio/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: activeTicker, quantity: qty, side }),
+        body: JSON.stringify({ ticker: currentTicker, quantity: qty, side }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ text: `${side.toUpperCase()} ${qty} ${activeTicker} @ $${data.price?.toFixed(2) ?? "?"}`, type: "success" });
+        setMessage({ text: `${side.toUpperCase()} ${qty} ${currentTicker} @ $${data.price?.toFixed(2) ?? "?"}`, type: "success" });
         setQuantity("");
         onTradeComplete();
       } else {
@@ -88,4 +97,6 @@ export default function TradeBar({ selectedTicker, onTradeComplete }: TradeBarPr
       )}
     </div>
   );
-}
+});
+
+export default TradeBar;

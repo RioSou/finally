@@ -42,6 +42,7 @@ export default function WatchlistPanel({
             return (
               <div
                 key={ticker}
+                data-testid="watchlist-row"
                 onClick={() => onSelectTicker(ticker)}
                 className={`flex items-center justify-between px-3 py-2 cursor-pointer border-b border-border/50 hover:bg-bg/50 transition-colors ${
                   selectedTicker === ticker ? "bg-bg" : ""
@@ -79,6 +80,7 @@ export default function WatchlistPanel({
                   </div>
                 </div>
                 <button
+                  data-testid="remove-ticker"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRemoveTicker(ticker);

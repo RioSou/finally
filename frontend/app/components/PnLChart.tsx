@@ -87,7 +87,7 @@ export default function PnLChart() {
                   fontSize: 10,
                   color: "#e6edf3",
                 }}
-                formatter={(value: number) => [`$${value.toFixed(2)}`, "Value"]}
+                formatter={(value) => [`$${Number(value).toFixed(2)}`, "Value"]}
               />
               <Line
                 type="monotone"

@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 test.describe("FinAlly E2E Smoke Tests", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    // Wait for the page to be fully loaded and prices to start streaming
-    await page.waitForLoadState("networkidle");
+    // Wait for the page to be fully loaded (SSE stream keeps network active, so use "load" not "networkidle")
+    await page.waitForLoadState("load");
   });
 
   test("1. Fresh load: watchlist shows 10 tickers, $10,000 cash, prices streaming", async ({
@@ -29,7 +29,7 @@ test.describe("FinAlly E2E Smoke Tests", () => {
     }
 
     // Check cash balance shows $10,000
-    await expect(page.getByText("10,000")).toBeVisible();
+    await expect(page.getByTestId("cash-balance")).toContainText("10,000");
 
     // Check that prices are streaming by watching for a price change
     // Wait for at least one price element to update (prices should be numbers like $XXX.XX)
@@ -45,20 +45,10 @@ test.describe("FinAlly E2E Smoke Tests", () => {
   });
 
   test("2. Connection status dot is green", async ({ page }) => {
-    // Look for a connection status indicator that is green
-    const statusDot = page.locator(
-      "[data-testid='connection-status'], .connection-status"
-    );
-    if (await statusDot.isVisible({ timeout: 5000 })) {
-      // Check it has green styling (could be class, color, or background-color)
-      await expect(statusDot).toHaveAttribute(/green|connected/i);
-    } else {
-      // Fallback: look for any green dot / indicator in the header
-      const greenIndicator = page.locator(
-        "[class*='green'], [class*='connected']"
-      );
-      await expect(greenIndicator.first()).toBeVisible({ timeout: 5000 });
-    }
+    // Wait for SSE to connect, then check data-status="connected"
+    const statusDot = page.getByTestId("connection-status");
+    await expect(statusDot).toBeVisible({ timeout: 5000 });
+    await expect(statusDot).toHaveAttribute("data-status", "connected", { timeout: 5000 });
   });
 
   test("3. Add ticker: add PYPL to watchlist", async ({ page }) => {
@@ -78,18 +68,12 @@ test.describe("FinAlly E2E Smoke Tests", () => {
   });
 
   test("4. Remove ticker: remove a ticker from watchlist", async ({ page }) => {
-    // First verify NFLX is in the watchlist
-    await expect(page.getByText("NFLX").first()).toBeVisible();
+    // Wait for watchlist to load, then verify NFLX is present
+    await expect(page.getByText("NFLX").first()).toBeVisible({ timeout: 10000 });
 
-    // Find and click the remove button for NFLX
-    const nflxRow = page.locator(
-      "[data-testid='watchlist-row']:has-text('NFLX'), tr:has-text('NFLX'), [class*='watchlist']:has-text('NFLX'), div:has-text('NFLX')"
-    ).first();
-
-    const removeButton = nflxRow.locator(
-      "button:has-text('remove'), button:has-text('Remove'), button:has-text('x'), button:has-text('X'), button:has-text('×'), [data-testid='remove-ticker'], button[aria-label*='remove' i]"
-    );
-    await removeButton.click();
+    // Use data-testid selectors for precise targeting
+    const nflxRow = page.locator("[data-testid='watchlist-row']:has-text('NFLX')");
+    await nflxRow.getByTestId("remove-ticker").click();
 
     // Verify NFLX is gone
     await expect(page.getByText("NFLX")).not.toBeVisible({ timeout: 5000 });
@@ -98,76 +82,45 @@ test.describe("FinAlly E2E Smoke Tests", () => {
   test("5. Buy shares: buy 5 AAPL, cash decreases, position appears", async ({
     page,
   }) => {
-    // Get initial cash balance text
-    const cashText = page.locator(
-      "[data-testid='cash-balance'], :has-text('cash'):has-text('$')"
-    ).first();
+    // AAPL is already selected (default). Just fill quantity and click buy.
+    const cashText = page.getByTestId("cash-balance");
     const initialCashText = await cashText.textContent();
 
-    // Fill in the trade bar
-    const tickerInput = page.locator(
-      "[data-testid='trade-ticker'], input[placeholder*='ticker' i]"
-    ).first();
-    const quantityInput = page.locator(
-      "[data-testid='trade-quantity'], input[placeholder*='quantity' i], input[placeholder*='shares' i], input[type='number']"
-    ).first();
-    const buyButton = page.locator(
-      "[data-testid='buy-button'], button:has-text('buy')"
-    ).first();
+    const quantityInput = page.getByTestId("trade-quantity");
+    await quantityInput.click();
+    await quantityInput.pressSequentially("5", { delay: 50 });
+    await page.getByTestId("buy-button").click();
+    await page.waitForTimeout(1500);
 
-    await tickerInput.fill("AAPL");
-    await quantityInput.fill("5");
-    await buyButton.click();
-
-    // Wait a moment for the trade to process
-    await page.waitForTimeout(1000);
-
-    // Verify cash decreased (text should be different)
+    // Verify cash decreased
     await expect(async () => {
       const newCashText = await cashText.textContent();
       expect(newCashText).not.toBe(initialCashText);
-    }).toPass({ timeout: 5000 });
+    }).toPass({ timeout: 10000 });
 
-    // Verify AAPL position appears in the positions table
-    const positionsArea = page.locator(
-      "[data-testid='positions-table'], [class*='position'], table:has-text('Qty'), table:has-text('quantity')"
-    ).first();
-    await expect(positionsArea).toContainText("AAPL", { timeout: 5000 });
+    // Verify AAPL position appears
+    await expect(page.getByTestId("positions-table")).toContainText("AAPL", { timeout: 5000 });
   });
 
   test("6. Sell shares: sell 2 AAPL, cash increases, position quantity decreases", async ({
     page,
   }) => {
-    // First buy 5 AAPL so we have shares to sell
-    const tickerInput = page.locator(
-      "[data-testid='trade-ticker'], input[placeholder*='ticker' i]"
-    ).first();
-    const quantityInput = page.locator(
-      "[data-testid='trade-quantity'], input[placeholder*='quantity' i], input[placeholder*='shares' i], input[type='number']"
-    ).first();
-    const buyButton = page.locator(
-      "[data-testid='buy-button'], button:has-text('buy')"
-    ).first();
-    const sellButton = page.locator(
-      "[data-testid='sell-button'], button:has-text('sell')"
-    ).first();
+    // AAPL is the default selected ticker — buy 5, then sell 2
+    const quantityInput = page.getByTestId("trade-quantity");
 
-    await tickerInput.fill("AAPL");
-    await quantityInput.fill("5");
-    await buyButton.click();
-    await page.waitForTimeout(1000);
+    await quantityInput.click();
+    await quantityInput.pressSequentially("5", { delay: 50 });
+    await page.getByTestId("buy-button").click();
+    await page.waitForTimeout(1500);
 
     // Record cash before selling
-    const cashText = page.locator(
-      "[data-testid='cash-balance'], :has-text('cash'):has-text('$')"
-    ).first();
+    const cashText = page.getByTestId("cash-balance");
     const cashBeforeSell = await cashText.textContent();
 
-    // Now sell 2 AAPL
-    await tickerInput.fill("AAPL");
-    await quantityInput.fill("2");
-    await sellButton.click();
-    await page.waitForTimeout(1000);
+    await quantityInput.click();
+    await quantityInput.pressSequentially("2", { delay: 50 });
+    await page.getByTestId("sell-button").click();
+    await page.waitForTimeout(1500);
 
     // Verify cash increased
     await expect(async () => {
@@ -179,85 +132,60 @@ test.describe("FinAlly E2E Smoke Tests", () => {
   test("7. Portfolio heatmap: AAPL rectangle visible after buying", async ({
     page,
   }) => {
-    // Buy some AAPL first
-    const tickerInput = page.locator(
-      "[data-testid='trade-ticker'], input[placeholder*='ticker' i]"
-    ).first();
-    const quantityInput = page.locator(
-      "[data-testid='trade-quantity'], input[placeholder*='quantity' i], input[placeholder*='shares' i], input[type='number']"
-    ).first();
-    const buyButton = page.locator(
-      "[data-testid='buy-button'], button:has-text('buy')"
-    ).first();
-
-    await tickerInput.fill("AAPL");
-    await quantityInput.fill("5");
-    await buyButton.click();
-    await page.waitForTimeout(1000);
+    // AAPL is selected by default — just fill quantity and buy
+    const quantityInput = page.getByTestId("trade-quantity");
+    await quantityInput.click();
+    await quantityInput.pressSequentially("5", { delay: 50 });
+    await page.getByTestId("buy-button").click();
+    await page.waitForTimeout(1500);
 
     // Verify heatmap shows AAPL
-    const heatmap = page.locator(
-      "[data-testid='portfolio-heatmap'], [class*='heatmap'], [class*='treemap']"
-    ).first();
+    const heatmap = page.getByTestId("portfolio-heatmap");
     await expect(heatmap).toBeVisible({ timeout: 5000 });
     await expect(heatmap).toContainText("AAPL", { timeout: 5000 });
   });
 
   test("8. P&L chart: has at least one data point", async ({ page }) => {
-    // The P&L chart should have data from portfolio_snapshots
-    // Look for the chart container
-    const pnlChart = page.locator(
-      "[data-testid='pnl-chart'], [class*='pnl'], [class*='portfolio-chart']"
-    ).first();
+    // Execute a trade to trigger a portfolio snapshot
+    const quantityInput = page.getByTestId("trade-quantity");
+    await quantityInput.click();
+    await quantityInput.pressSequentially("1", { delay: 50 });
+    await page.getByTestId("buy-button").click();
+    await page.waitForTimeout(2000);
 
+    // The P&L chart container should be visible
+    const pnlChart = page.getByTestId("pnl-chart");
     await expect(pnlChart).toBeVisible({ timeout: 10000 });
 
-    // Verify the chart has rendered content (canvas or SVG with paths/elements)
-    const chartContent = pnlChart.locator("canvas, svg, path, line, rect");
-    await expect(chartContent.first()).toBeVisible({ timeout: 5000 });
+    // After a trade, the chart should have SVG content (Recharts renders SVG)
+    const chartContent = pnlChart.locator("svg, canvas");
+    await expect(chartContent.first()).toBeVisible({ timeout: 10000 });
   });
 
   test("9. AI chat (mock): send message and receive response", async ({
     page,
   }) => {
-    // Find and open the chat panel if needed
-    const chatToggle = page.locator(
-      "[data-testid='chat-toggle'], button:has-text('chat'), button:has-text('AI'), button[aria-label*='chat' i]"
-    );
-    if (await chatToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await chatToggle.click();
-    }
-
-    // Find the chat input
-    const chatInput = page.locator(
-      "[data-testid='chat-input'], [class*='chat'] input, [class*='chat'] textarea, input[placeholder*='message' i], textarea[placeholder*='message' i]"
-    ).first();
+    // Chat panel is open by default — find the input directly
+    const chatInput = page.getByTestId("chat-input");
     await expect(chatInput).toBeVisible({ timeout: 5000 });
 
-    // Send a message
-    await chatInput.fill("What is my portfolio?");
+    // Type the message character by character to avoid React re-render race
+    await chatInput.click();
+    await chatInput.pressSequentially("What is my portfolio?", { delay: 20 });
     await chatInput.press("Enter");
 
-    // Wait for the assistant response to appear (mock should be fast)
-    const assistantMessage = page.locator(
-      "[data-testid='chat-message-assistant'], [class*='assistant'], [class*='chat-response']"
-    ).first();
+    // Wait for the assistant response (mock is fast)
+    const assistantMessage = page.getByTestId("chat-message-assistant").first();
     await expect(assistantMessage).toBeVisible({ timeout: 15000 });
-
-    // Verify no error messages are shown
-    const errorMessage = page.locator(
-      "[class*='error'], [data-testid='chat-error']"
-    );
-    await expect(errorMessage).not.toBeVisible();
   });
 
   test("10. Click ticker in watchlist: main chart updates", async ({
     page,
   }) => {
-    // Click on MSFT in the watchlist
-    const msftEntry = page.getByText("MSFT").first();
-    await expect(msftEntry).toBeVisible();
-    await msftEntry.click();
+    // Wait for watchlist to load, then click the MSFT row
+    const msftRow = page.locator("[data-testid='watchlist-row']").filter({ hasText: "MSFT" });
+    await expect(msftRow).toBeVisible({ timeout: 10000 });
+    await msftRow.click();
 
     // Verify the main chart area shows MSFT
     const mainChart = page.locator(

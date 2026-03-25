@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage, TradeAction, WatchlistAction } from "@/app/types";
 
 interface ChatPanelProps {
@@ -8,7 +8,7 @@ interface ChatPanelProps {
   onTradeComplete?: () => void;
 }
 
-export default function ChatPanel({ visible, onTradeComplete }: ChatPanelProps) {
+const ChatPanel = memo(function ChatPanel({ visible, onTradeComplete }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -205,4 +205,6 @@ export default function ChatPanel({ visible, onTradeComplete }: ChatPanelProps) 
       </div>
     </div>
   );
-}
+});
+
+export default ChatPanel;

@@ -12,6 +12,7 @@ interface TreemapNode {
   size: number;
   pnl_pct: number;
   fill: string;
+  [key: string]: unknown;
 }
 
 function getPnlColor(pnlPct: number): string {
