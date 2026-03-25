@@ -33,13 +33,21 @@ export function useSSE(): SSEState {
       try {
         const data = JSON.parse(event.data);
 
-        // Handle array of price updates or single update
-        const updates: PriceUpdate[] = Array.isArray(data) ? data : [data];
+        // Server sends a dict {AAPL: {ticker, price, ...}, ...}
+        // Also handle array or single-object formats for forward compat
+        let updates: PriceUpdate[];
+        if (Array.isArray(data)) {
+          updates = data;
+        } else if (data && typeof data === "object" && !("ticker" in data)) {
+          updates = Object.values(data) as PriceUpdate[];
+        } else {
+          updates = [data];
+        }
 
         setPrices((prev) => {
           const next = { ...prev };
           for (const update of updates) {
-            next[update.ticker] = update;
+            if (update.ticker) next[update.ticker] = update;
           }
           return next;
         });
@@ -47,6 +55,7 @@ export function useSSE(): SSEState {
         setSparklines((prev) => {
           const next = { ...prev };
           for (const update of updates) {
+            if (!update.ticker) continue;
             const existing = next[update.ticker] || [];
             const updated = [...existing, update.price];
             next[update.ticker] =

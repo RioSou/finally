@@ -64,7 +64,7 @@ export default function Home() {
     return { ...pos, current_price: currentPrice, unrealized_pnl: unrealizedPnl, pnl_pct: pnlPct };
   });
 
-  const handleAddTicker = async (ticker: string) => {
+  const handleAddTicker = useCallback(async (ticker: string) => {
     if (tickers.includes(ticker)) return;
     try {
       const res = await fetch("/api/watchlist", {
@@ -76,12 +76,11 @@ export default function Home() {
         setTickers((prev) => [...prev, ticker]);
       }
     } catch {
-      // Fallback: add locally
       setTickers((prev) => [...prev, ticker]);
     }
-  };
+  }, [tickers]);
 
-  const handleRemoveTicker = async (ticker: string) => {
+  const handleRemoveTicker = useCallback(async (ticker: string) => {
     try {
       await fetch(`/api/watchlist/${ticker}`, { method: "DELETE" });
     } catch {
@@ -91,7 +90,7 @@ export default function Home() {
     if (selectedTicker === ticker) {
       setSelectedTicker(null);
     }
-  };
+  }, [selectedTicker]);
 
   const selectedPrice = selectedTicker ? prices[selectedTicker] : undefined;
 

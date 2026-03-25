@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { PriceUpdate } from "@/app/types";
 import PriceFlash from "./PriceFlash";
 import SparklineChart from "./SparklineChart";
@@ -100,7 +101,7 @@ export default function WatchlistPanel({
   );
 }
 
-function AddTickerInput({ onAdd }: { onAdd: (ticker: string) => void }) {
+const AddTickerInput = memo(function AddTickerInput({ onAdd }: { onAdd: (ticker: string) => void }) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -115,6 +116,7 @@ function AddTickerInput({ onAdd }: { onAdd: (ticker: string) => void }) {
   return (
     <form onSubmit={handleSubmit} className="p-2 border-t border-border">
       <input
+        data-testid="watchlist-add-input"
         name="ticker"
         type="text"
         placeholder="Add ticker..."
@@ -122,4 +124,4 @@ function AddTickerInput({ onAdd }: { onAdd: (ticker: string) => void }) {
       />
     </form>
   );
-}
+});

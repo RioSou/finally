@@ -40,7 +40,6 @@ def create_stream_router(price_cache: PriceCache) -> APIRouter:
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",  # Disable nginx buffering if proxied
             },
         )
@@ -81,6 +80,9 @@ async def _generate_events(
                     data = {ticker: update.to_dict() for ticker, update in prices.items()}
                     payload = json.dumps(data)
                     yield f"data: {payload}\n\n"
+            else:
+                # Keep-alive comment so the browser doesn't close idle connections
+                yield ": keep-alive\n\n"
 
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
