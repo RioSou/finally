@@ -1,6 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, request } from "@playwright/test";
 
 test.describe("FinAlly E2E Smoke Tests", () => {
+  test.beforeAll(async ({ baseURL }) => {
+    // Reset DB to clean seed state before the test suite runs.
+    // Only works when LLM_MOCK=true (test mode); no-ops otherwise.
+    const ctx = await request.newContext({ baseURL });
+    await ctx.post("/api/test/reset");
+    await ctx.dispose();
+  });
+
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     // Wait for the page to be fully loaded (SSE stream keeps network active, so use "load" not "networkidle")

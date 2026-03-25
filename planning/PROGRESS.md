@@ -36,6 +36,7 @@
 - Fixed `waitForLoadState("networkidle")` → `"load"` (SSE keeps network active)
 - Fixed selector ambiguities, added precise `data-testid` selectors throughout
 - Trace recording set to `"on-first-retry"` in `playwright.config.ts`
+- **Fixed test state pollution**: tests 1 and 4 failed on re-runs because previous runs had modified DB state (NFLX removed, cash spent). Fix: added `POST /api/test/reset` endpoint to backend (only active when `LLM_MOCK=true`) that wipes all tables and re-seeds defaults; added `beforeAll` to test suite that calls it before each run.
 
 ---
 

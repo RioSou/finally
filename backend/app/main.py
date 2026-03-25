@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
@@ -17,6 +18,7 @@ from app.api.portfolio import record_snapshot
 from app.api.portfolio import router as portfolio_router
 from app.api.watchlist import router as watchlist_router
 from app.db import get_db_connection, init_db
+from app.db.seed import seed_default_data
 from app.market import PriceCache, create_market_data_source, create_stream_router
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,26 @@ app.include_router(chat_router)
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.post("/api/test/reset")
+async def test_reset():
+    """Reset DB to seed state. Only available in LLM_MOCK=true mode."""
+    if os.environ.get("LLM_MOCK", "false").lower() != "true":
+        raise HTTPException(status_code=403, detail="Only available in test mode")
+    conn = get_db_connection()
+    try:
+        conn.execute("DELETE FROM trades")
+        conn.execute("DELETE FROM positions")
+        conn.execute("DELETE FROM portfolio_snapshots")
+        conn.execute("DELETE FROM chat_messages")
+        conn.execute("DELETE FROM watchlist")
+        conn.execute("DELETE FROM users_profile")
+        seed_default_data(conn)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "reset"}
 
 
 # Mount static files last (catch-all for Next.js export)
