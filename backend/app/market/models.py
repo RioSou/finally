@@ -44,6 +44,6 @@ class PriceUpdate:
             "previous_price": self.previous_price,
             "timestamp": self.timestamp,
             "change": self.change,
-            "change_percent": self.change_percent,
+            "change_pct": self.change_percent,
             "direction": self.direction,
         }
