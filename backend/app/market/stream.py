@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from .cache import PriceCache
 
@@ -18,30 +18,20 @@ router = APIRouter(prefix="/api/stream", tags=["streaming"])
 
 
 def create_stream_router(price_cache: PriceCache) -> APIRouter:
-    """Create the SSE streaming router with a reference to the price cache.
-
-    This factory pattern lets us inject the PriceCache without globals.
-    """
+    """Create the SSE streaming router with a reference to the price cache."""
 
     @router.get("/prices")
-    async def stream_prices(request: Request) -> StreamingResponse:
+    async def stream_prices(request: Request) -> EventSourceResponse:
         """SSE endpoint for live price updates.
 
-        Streams all tracked ticker prices every ~500ms. The client connects
-        with EventSource and receives events in the format:
-
-            data: {"AAPL": {"ticker": "AAPL", "price": 190.50, ...}, ...}
-
-        Includes a retry directive so the browser auto-reconnects on
-        disconnection (EventSource built-in behavior).
+        Uses sse-starlette for reliable Chromium/browser compatibility.
+        Sends price updates every ~500ms. Includes built-in ping keep-alives.
         """
-        return StreamingResponse(
-            _generate_events(price_cache, request),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",  # Disable nginx buffering if proxied
-            },
+        client_ip = request.client.host if request.client else "unknown"
+        logger.info("SSE client connected: %s", client_ip)
+        return EventSourceResponse(
+            _generate_events(price_cache),
+            ping=15,  # comment ping every 15s to keep connection alive
         )
 
     return router
@@ -49,41 +39,24 @@ def create_stream_router(price_cache: PriceCache) -> APIRouter:
 
 async def _generate_events(
     price_cache: PriceCache,
-    request: Request,
     interval: float = 0.5,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[ServerSentEvent, None]:
     """Async generator that yields SSE-formatted price events.
 
-    Sends all prices every `interval` seconds. Stops when the client
-    disconnects (detected via request.is_disconnected()).
+    EventSourceResponse handles disconnect detection and cancels this generator
+    when the client disconnects, so no explicit is_disconnected() check needed.
     """
-    # Tell the client to retry after 1 second if the connection drops
-    yield "retry: 1000\n\n"
+    # Send retry directive so the browser reconnects after 1s if dropped
+    yield ServerSentEvent(retry=1000)
 
     last_version = -1
-    client_ip = request.client.host if request.client else "unknown"
-    logger.info("SSE client connected: %s", client_ip)
+    while True:
+        current_version = price_cache.version
+        if current_version != last_version:
+            last_version = current_version
+            prices = price_cache.get_all()
+            if prices:
+                data = {ticker: update.to_dict() for ticker, update in prices.items()}
+                yield ServerSentEvent(data=json.dumps(data))
 
-    try:
-        while True:
-            # Check for client disconnect
-            if await request.is_disconnected():
-                logger.info("SSE client disconnected: %s", client_ip)
-                break
-
-            current_version = price_cache.version
-            if current_version != last_version:
-                last_version = current_version
-                prices = price_cache.get_all()
-
-                if prices:
-                    data = {ticker: update.to_dict() for ticker, update in prices.items()}
-                    payload = json.dumps(data)
-                    yield f"data: {payload}\n\n"
-            else:
-                # Keep-alive comment so the browser doesn't close idle connections
-                yield ": keep-alive\n\n"
-
-            await asyncio.sleep(interval)
-    except asyncio.CancelledError:
-        logger.info("SSE stream cancelled for: %s", client_ip)
+        await asyncio.sleep(interval)

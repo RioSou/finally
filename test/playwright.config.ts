@@ -8,7 +8,7 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: "http://localhost:8000",
-    trace: "on",
+    trace: "on-first-retry",
     video: "off",
   },
   projects: [

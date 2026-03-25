@@ -34,7 +34,8 @@ function CustomContent(props: Record<string, unknown>) {
     pnl_pct: number;
   };
 
-  if (width < 30 || height < 20) return null;
+  // pnl_pct is undefined for Recharts' internal root/container node — skip it
+  if (typeof pnl_pct !== "number" || width < 30 || height < 20) return null;
 
   return (
     <g>
